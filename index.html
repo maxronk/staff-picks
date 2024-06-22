@@ -173,20 +173,21 @@
             const targetContainer = e.target.closest('.image-container');
             if (targetContainer && targetContainer !== draggedElement) {
                 const targetRect = targetContainer.getBoundingClientRect();
-                const targetMiddle = targetRect.left + targetRect.width / 2;
-                
+                const targetMiddle = targetRect.left + targetRect.width / 0.5;
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
                 if (e.clientX < targetMiddle) {
-                    dropIndicator.style.left = `${targetRect.left - 5}px`;
-                    dropIndicator.style.top = `${targetRect.top}px`;
+                    // dropIndicator.style.left = `${targetRect.left - 5}px`;
+                    // dropIndicator.style.top = `${targetRect.top + scrollTop}px`; // Adjusted for scroll
+                    // dropIndicator.style.width = '5px';
+                    // dropIndicator.style.height = `${targetRect.height}px`;
+                    dropIndicator.style.left = `${targetRect.right}px`;
+                    dropIndicator.style.top = `${targetRect.top + scrollTop}px`; // Adjusted for scroll
                     dropIndicator.style.width = '5px';
                     dropIndicator.style.height = `${targetRect.height}px`;
                 } else {
-                    dropIndicator.style.left = `${targetRect.right}px`;
-                    dropIndicator.style.top = `${targetRect.top}px`;
-                    dropIndicator.style.width = '5px';
-                    dropIndicator.style.height = `${targetRect.height}px`;
                 }
-                
+
                 document.body.appendChild(dropIndicator);
             }
         }
