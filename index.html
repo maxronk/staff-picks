@@ -1,1 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responsive Image Gallery with Drag and Drop</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background-color: black;
+            color: white;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px;
+            background-color: #000000;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(255,255,255,0.1);
+        }
+        .image-container {
+            flex-grow: 1;
+            overflow: hidden;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+            cursor: move;
+            position: relative;
+        }
+        .image-container:hover {
+            transform: scale(1.01);
+            z-index: 1;
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .placeholder {
+            background-color: #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #aaa;
+        }
+        .dragging {
+            opacity: 0.5;
+            z-index: 1000;
+        }
+        .drop-indicator {
+            position: absolute;
+            background-color: #4CAF50;
+            transition: all 0.3s ease;
+        }
+        .drag-over {
+            outline: 2px dashed #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <input type="file" id="imageInput" multiple accept="image/*">
+        <button id="shuffleButton">Shuffle Images</button>
+    </div>
+    <div class="gallery" id="imageGallery"></div>
 
+    <script>
+        const gallery = document.getElementById('imageGallery');
+        const imageInput = document.getElementById('imageInput');
+        const shuffleButton = document.getElementById('shuffleButton');
+        let images = Array(4).fill(null).map((_, index) => ({ id: index, src: `/api/placeholder/400/300`, aspectRatio: 4/3, isPlaceholder: true }));
+        let draggedElement = null;
+        let dropIndicator = document.createElement('div');
+        dropIndicator.className = 'drop-indicator';
+
+        function calculateLayout() {
+            if (!images || images.length === 0) {
+                console.warn('No images to layout');
+                return [];
+            }
+
+            const galleryWidth = gallery.clientWidth - 20; // Subtract padding
+            const gap = 10;
+            let imagesPerRow;
+
+            if (galleryWidth >= 1200) imagesPerRow = 4;
+            else if (galleryWidth >= 800) imagesPerRow = 3;
+            else imagesPerRow = 2;
+
+            const rowWidth = galleryWidth - (gap * (imagesPerRow - 1));
+            const rows = [];
+            let currentRow = [];
+            let currentRowAspectRatioSum = 0;
+
+            images.forEach(image => {
+                currentRow.push(image);
+                currentRowAspectRatioSum += image.aspectRatio;
+
+                if (currentRow.length === imagesPerRow) {
+                    rows.push({ images: currentRow, aspectRatioSum: currentRowAspectRatioSum });
+                    currentRow = [];
+                    currentRowAspectRatioSum = 0;
+                }
+            });
+
+            if (currentRow.length > 0) {
+                rows.push({ images: currentRow, aspectRatioSum: currentRowAspectRatioSum });
+            }
+
+            return rows.map(row => {
+                const rowHeight = rowWidth / row.aspectRatioSum;
+                return row.images.map(image => ({
+                    ...image,
+                    width: rowHeight * image.aspectRatio,
+                    height: rowHeight
+                }));
+            }).flat();
+        }
+
+        function renderGallery() {
+            const layoutImages = calculateLayout();
+            if (!layoutImages || layoutImages.length === 0) {
+                console.warn('No images to render');
+                gallery.innerHTML = '<p>No images to display</p>';
+                return;
+            }
+
+            gallery.innerHTML = '';
+            layoutImages.forEach(image => {
+                const container = document.createElement('div');
+                container.className = 'image-container';
+                container.draggable = true;
+                container.dataset.id = image.id;
+                container.style.width = `${image.width}px`;
+                container.style.height = `${image.height}px`;
+
+                if (image.isPlaceholder) {
+                    container.classList.add('placeholder');
+                    container.textContent = '+';
+                } else {
+                    const img = document.createElement('img');
+                    img.src = image.src;
+                    img.alt = 'Gallery Image';
+                    container.appendChild(img);
+                }
+
+                container.addEventListener('dragstart', dragStart);
+                container.addEventListener('dragover', dragOver);
+                container.addEventListener('dragleave', dragLeave);
+                container.addEventListener('drop', drop);
+                container.addEventListener('dragend', dragEnd);
+
+                gallery.appendChild(container);
+            });
+        }
+
+        function dragStart(e) {
+            draggedElement = e.target.closest('.image-container');
+            e.dataTransfer.setData('text/plain', draggedElement.dataset.id);
+            setTimeout(() => draggedElement.classList.add('dragging'), 0);
+        }
+
+        function dragOver(e) {
+            e.preventDefault();
+            const targetContainer = e.target.closest('.image-container');
+            if (targetContainer && targetContainer !== draggedElement) {
+                const targetRect = targetContainer.getBoundingClientRect();
+                const targetMiddle = targetRect.left + targetRect.width / 2;
+                
+                if (e.clientX < targetMiddle) {
+                    dropIndicator.style.left = `${targetRect.left - 5}px`;
+                    dropIndicator.style.top = `${targetRect.top}px`;
+                    dropIndicator.style.width = '5px';
+                    dropIndicator.style.height = `${targetRect.height}px`;
+                } else {
+                    dropIndicator.style.left = `${targetRect.right}px`;
+                    dropIndicator.style.top = `${targetRect.top}px`;
+                    dropIndicator.style.width = '5px';
+                    dropIndicator.style.height = `${targetRect.height}px`;
+                }
+                
+                document.body.appendChild(dropIndicator);
+            }
+        }
+
+        function dragLeave(e) {
+            if (e.target.closest('.image-container') && !e.relatedTarget.closest('.image-container')) {
+                dropIndicator.remove();
+            }
+        }
+
+        function drop(e) {
+            e.preventDefault();
+            dropIndicator.remove();
+            const targetContainer = e.target.closest('.image-container');
+            
+            if (draggedElement && targetContainer && draggedElement !== targetContainer) {
+                const draggedId = parseInt(draggedElement.dataset.id);
+                const targetId = parseInt(targetContainer.dataset.id);
+                const draggedIndex = images.findIndex(img => img.id === draggedId);
+                let targetIndex = images.findIndex(img => img.id === targetId);
+                
+                if (draggedIndex > targetIndex) {
+                    targetIndex++;
+                }
+                
+                const [removed] = images.splice(draggedIndex, 1);
+                images.splice(targetIndex, 0, removed);
+                renderGallery();
+            } else if (!draggedElement && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files, targetContainer);
+            }
+        }
+
+        function dragEnd(e) {
+            if (draggedElement) {
+                draggedElement.classList.remove('dragging');
+            }
+            dropIndicator.remove();
+            draggedElement = null;
+        }
+
+        function handleFiles(files, targetContainer) {
+            if (!files || files.length === 0) {
+                console.warn('No files to handle');
+                return;
+            }
+
+            let newImages = [];
+            let processedFiles = 0;
+
+            Array.from(files).forEach((file, index) => {
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = new Image();
+                        img.onload = function() {
+                            const aspectRatio = img.width / img.height;
+                            const newImage = { id: Date.now() + index, src: e.target.result, aspectRatio, isPlaceholder: false };
+                            newImages.push(newImage);
+                            
+                            processedFiles++;
+                            if (processedFiles === files.length) {
+                                updateImagesArray(newImages, targetContainer);
+                            }
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    processedFiles++;
+                    if (processedFiles === files.length && newImages.length > 0) {
+                        updateImagesArray(newImages, targetContainer);
+                    }
+                }
+            });
+        }
+
+        function updateImagesArray(newImages, targetContainer) {
+            if (targetContainer) {
+                const targetId = parseInt(targetContainer.dataset.id);
+                const targetIndex = images.findIndex(img => img.id === targetId);
+                if (targetIndex !== -1) {
+                    // Replace the target image with the first new image
+                    images[targetIndex] = newImages[0];
+                    // Add any additional new images after the target index
+                    if (newImages.length > 1) {
+                        images.splice(targetIndex + 1, 0, ...newImages.slice(1));
+                    }
+                }
+            } else {
+                // Replace placeholders first, then add to the end
+                let placeholderIndex = images.findIndex(img => img.isPlaceholder);
+                newImages.forEach(newImage => {
+                    if (placeholderIndex !== -1) {
+                        images[placeholderIndex] = newImage;
+                        placeholderIndex = images.findIndex(img => img.isPlaceholder);
+                    } else {
+                        images.push(newImage);
+                    }
+                });
+            }
+
+            // Ensure we always have at least 4 items, adding placeholders if necessary
+            while (images.length < 4) {
+                images.push({
+                    id: Date.now() + images.length,
+                    src: `/api/placeholder/400/300`,
+                    aspectRatio: 4/3,
+                    isPlaceholder: true
+                });
+            }
+
+            renderGallery();
+        }
+
+        function handleFileSelect(e) {
+            handleFiles(e.target.files);
+        }
+
+        function shuffleImages() {
+            if (!images || images.length === 0) {
+                console.warn('No images to shuffle');
+                return;
+            }
+
+            const nonPlaceholders = images.filter(img => !img.isPlaceholder);
+            const placeholders = images.filter(img => img.isPlaceholder);
+
+            for (let i = nonPlaceholders.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [nonPlaceholders[i], nonPlaceholders[j]] = [nonPlaceholders[j], nonPlaceholders[i]];
+            }
+
+            images = [...nonPlaceholders, ...placeholders];
+            renderGallery();
+        }
+
+        imageInput.addEventListener('change', handleFileSelect);
+        shuffleButton.addEventListener('click', shuffleImages);
+        window.addEventListener('resize', renderGallery);
+
+        gallery.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!draggedElement) {
+                gallery.classList.add('drag-over');
+            }
+        });
+
+        gallery.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!draggedElement) {
+                gallery.classList.remove('drag-over');
+            }
+        });
+
+        gallery.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            gallery.classList.remove('drag-over');
+            if (!draggedElement && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+
+        renderGallery();
+    </script>
+</body>
+</html>
