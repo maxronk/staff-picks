@@ -90,8 +90,9 @@
             const gap = 10;
             let imagesPerRow;
 
-            if (galleryWidth >= 1200) imagesPerRow = 4;
-            else if (galleryWidth >= 800) imagesPerRow = 3;
+            if (galleryWidth >= 2250) imagesPerRow = 5;
+            else if (galleryWidth >= 2000) imagesPerRow = 4;
+            else if (galleryWidth >= 1400) imagesPerRow = 3;
             else imagesPerRow = 2;
 
             const rowWidth = galleryWidth - (gap * (imagesPerRow - 1));
@@ -201,21 +202,28 @@
             dropIndicator.remove();
             const targetContainer = e.target.closest('.image-container');
             
-            if (draggedElement && targetContainer && draggedElement !== targetContainer) {
-                const draggedId = parseInt(draggedElement.dataset.id);
-                const targetId = parseInt(targetContainer.dataset.id);
-                const draggedIndex = images.findIndex(img => img.id === draggedId);
-                let targetIndex = images.findIndex(img => img.id === targetId);
-                
-                if (draggedIndex > targetIndex) {
-                    targetIndex++;
+            // Check if the drop involves dragging an existing element
+            if (draggedElement) {
+                if (targetContainer && draggedElement !== targetContainer) {
+                    const draggedId = parseInt(draggedElement.dataset.id);
+                    const targetId = parseInt(targetContainer.dataset.id);
+                    const draggedIndex = images.findIndex(img => img.id === draggedId);
+                    let targetIndex = images.findIndex(img => img.id === targetId);
+                    
+                    if (draggedIndex > targetIndex) {
+                        targetIndex++;
+                    }
+                    
+                    const [removed] = images.splice(draggedIndex, 1);
+                    images.splice(targetIndex, 0, removed);
+                    renderGallery();
                 }
-                
-                const [removed] = images.splice(draggedIndex, 1);
-                images.splice(targetIndex, 0, removed);
-                renderGallery();
-            } else if (!draggedElement && e.dataTransfer.files.length > 0) {
-                handleFiles(e.dataTransfer.files, targetContainer);
+            } else if (e.dataTransfer.files.length > 0) {
+                // This condition ensures files are only processed when dropped directly into the gallery,
+                // not when dropped onto an image container.
+                if (!targetContainer) {
+                    handleFiles(e.dataTransfer.files);
+                }
             }
         }
 
